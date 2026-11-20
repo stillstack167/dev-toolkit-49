@@ -1,43 +1,27 @@
 import functools
-import logging
-from typing import Any, Callable, Dict
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('dev-toolkit-49')
+from typing import Any, Callable, List, Dict
 
 class DataPipeline:
-    def __init__(self):
-        self._registry: Dict[str, Callable] = {}
+    def __init__(self, steps: List[Callable] = None):
+        self.steps = steps or []
 
-    def register(self, name: str):
-        def decorator(func: Callable):
-            self._registry[name] = func
-            return func
-        return decorator
+    def add_stage(self, func: Callable) -> None:
+        self.steps.append(func)
 
-    def execute(self, task: str, *args, **kwargs) -> Any:
-        func = self._registry.get(task)
-        if not func:
-            logger.error(f'Task {task} missing in registry')
-            return None
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            logger.exception(f'Failure during {task}: {e}')
-            return None
+    def execute(self, data: Any) -> Any:
+        return functools.reduce(lambda acc, func: func(acc), self.steps, data)
 
-pipeline = DataPipeline()
+def sanitize_input(data: Dict[str, Any]) -> Dict[str, Any]:
+    return {str(k).strip().lower(): v for k, v in data.items() if v is not None}
 
-@pipeline.register('clean')
-def clean_data(data: str) -> str:
-    return ''.join(c for c in data if c.isalnum()).lower()
+def transform_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    data.update({'processed': True, 'version': 49})
+    return data
 
-@pipeline.register('normalize')
-def normalize_data(data: str) -> str:
-    return data.strip().capitalize()
+def run_dev_toolkit_flow(raw_data: Dict[str, Any]) -> Dict[str, Any]:
+    pipeline = DataPipeline([sanitize_input, transform_payload])
+    return pipeline.execute(raw_data)
 
 if __name__ == '__main__':
-    raw = '  Dev-Toolkit 49!  '
-    cleaned = pipeline.execute('clean', raw)
-    result = pipeline.execute('normalize', cleaned)
-    print(f'Processed: {result}')
+    sample = {' NAME ': 'dev-toolkit', 'VAL': None, 'ID': 49}
+    print(run_dev_toolkit_flow(sample))
